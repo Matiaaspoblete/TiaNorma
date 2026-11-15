@@ -1,0 +1,77 @@
+{
+  "revision": 24,
+  "pieces": [
+    {
+      "id": "plato-azul",
+      "title": "Plato azul",
+      "price": 30000,
+      "listed": true,
+      "sold": false,
+      "clientKey": null,
+      "image": {
+        "kind": "seed",
+        "file": "plato-azul.jpg"
+      }
+    },
+    {
+      "id": "taza-y-plato",
+      "title": "Taza y plato",
+      "price": 20000,
+      "listed": true,
+      "sold": false,
+      "clientKey": null,
+      "image": {
+        "kind": "seed",
+        "file": "taza-y-plato.jpg"
+      }
+    },
+    {
+      "id": "caramelera",
+      "title": "Caramelera",
+      "price": 30000,
+      "listed": true,
+      "sold": true,
+      "clientKey": null,
+      "image": {
+        "kind": "seed",
+        "file": "caramelera.png"
+      }
+    },
+    {
+      "id": "jarrones",
+      "title": "Jarrones",
+      "price": 25000,
+      "listed": false,
+      "sold": false,
+      "clientKey": null,
+      "image": {
+        "kind": "seed",
+        "file": "jarrones.jpg"
+      }
+    },
+    {
+      "id": "mate-y-cuenco",
+      "title": "Mate y cuenco",
+      "price": 30000,
+      "listed": true,
+      "sold": false,
+      "clientKey": null,
+      "image": {
+        "kind": "seed",
+        "file": "mate-y-cuenco.jpg"
+      }
+    },
+    {
+      "id": "ae0c4e75-734b-48fb-bd48-642c885f2698",
+      "title": "Tazones",
+      "price": 13000,
+      "listed": true,
+      "sold": false,
+      "clientKey": "ae0c4e75-734b-48fb-bd48-642c885f2698",
+      "image": {
+        "kind": "upload",
+        "file": "ae0c4e75-734b-48fb-bd48-642c885f2698.jpg"
+      }
+    }
+  ]
+}

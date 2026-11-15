@@ -22,6 +22,13 @@ export type PhotoReceipt =
   | { ok: true; title: string; priceLabel: string }
   | { ok: false; reason: string };
 
+function pieceImageUrl(url: string): boolean {
+  if (url.includes("..") || url.includes("\\") || url.includes("//")) return false;
+  if (url.startsWith("/api/piezas/")) return url.length > "/api/piezas/".length && !url.slice("/api/piezas/".length).includes("/");
+  if (url.startsWith("/semillas/")) return /^[a-z0-9-]+\.(?:jpg|jpeg|png|webp)$/.test(url.slice("/semillas/".length));
+  return false;
+}
+
 export function parseVitrina(input: unknown): Vitrina | null {
   if (!input || typeof input !== "object" || Array.isArray(input)) return null;
   const record = input as Record<string, unknown>;
@@ -34,13 +41,7 @@ export function parseVitrina(input: unknown): Vitrina | null {
     if (typeof item.id !== "string" || !item.id) return null;
     if (typeof item.title !== "string" || typeof item.priceLabel !== "string") return null;
     if (typeof item.sold !== "boolean") return null;
-    if (
-      typeof item.imageUrl !== "string" ||
-      !item.imageUrl.startsWith("/api/piezas/") ||
-      item.imageUrl.includes("..")
-    ) {
-      return null;
-    }
+    if (typeof item.imageUrl !== "string" || !pieceImageUrl(item.imageUrl)) return null;
     pieces.push({
       id: item.id,
       title: item.title,

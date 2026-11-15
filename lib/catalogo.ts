@@ -469,7 +469,9 @@ function catalogFile(): string {
 }
 
 function assertSeedFiles() {
-  const dir = path.join(process.cwd(), "contenido", "semillas");
+  const dir = path.join(process.cwd(), "public", "semillas");
+  // On Vercel the function bundle does not contain public/. The CDN serves those files.
+  if (!fs.existsSync(dir)) return;
   for (const seed of SEEDS) {
     if (!fs.existsSync(path.join(dir, seed.file))) throw new Error(`Falta la semilla ${seed.file}.`);
   }
@@ -572,7 +574,11 @@ function loadStore(): Store {
   const file = catalogFile();
   if (!fs.existsSync(file)) {
     const store = seedStore();
-    writeStore(store);
+    try {
+      writeStore(store);
+    } catch {
+      // Vercel cannot write data/catalogo.json. The five seed pieces still render.
+    }
     return store;
   }
   let raw: string;
@@ -617,7 +623,7 @@ function project(store: Store): Vitrina {
         id: piece.id,
         title: piece.title,
         priceLabel: formatPrice(piece.price),
-        imageUrl: `/api/piezas/${piece.id}`,
+        imageUrl: piece.image.kind === "seed" ? `/semillas/${piece.image.file}` : `/api/piezas/${piece.id}`,
         sold: piece.sold === true,
       })),
   };
@@ -699,7 +705,7 @@ export function readPieceImage(
   if (!mediaType) return null;
   const full =
     piece.image.kind === "seed"
-      ? path.join(process.cwd(), "contenido", "semillas", file)
+      ? path.join(process.cwd(), "public", "semillas", file)
       : path.join(process.cwd(), "data", "piezas", file);
   try {
     return { bytes: new Uint8Array(fs.readFileSync(full)), mediaType };
