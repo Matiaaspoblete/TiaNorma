@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { nombreForSoldTool, rememberSpeech, soldName, type PieceMemory } from "./pedido";
 import { notifyVitrina } from "../vitrina-aviso";
+import { parseVitrina } from "../vitrina";
 
 export type CallPhase = "idle" | "dialing" | "live" | "ended";
 
@@ -77,6 +79,8 @@ type Rig = {
   control: Promise<void>;
   captionSeq: number;
   handledCalls: Set<string>;
+  titles: string[];
+  memory: PieceMemory;
 };
 
 const SAMPLE_RATE = 24000;
@@ -185,9 +189,7 @@ function toolCallFrom(record: Record<string, unknown>): { callId: string; name: 
     }
   }
   if (!toolEvent || !name || !callId) return null;
-  const payload = argumentsJson(args);
-  if (!payload && name !== HANGUP_TOOL) return null;
-  return { callId, name, argumentsJson: payload || "{}" };
+  return { callId, name, argumentsJson: argumentsJson(args) || "{}" };
 }
 
 function sendEvent(socket: WebSocket | null, event: unknown) {
@@ -237,6 +239,8 @@ export function useSobrinoCall(): SobrinoCall {
     control: Promise.resolve(),
     captionSeq: 0,
     handledCalls: new Set<string>(),
+    titles: [],
+    memory: { lastTitle: null, awaitingChoice: false },
   });
   const mounted = useRef(true);
   const [, setVersion] = useState(0);
@@ -358,6 +362,31 @@ export function useSobrinoCall(): SobrinoCall {
     sessionRef.current.captions = [...sessionRef.current.captions, { id, who: "norma", text }];
   }, []);
 
+  const listedTitles = useCallback(async () => {
+    try {
+      const response = await fetch("/api/vitrina", { cache: "no-store" });
+      if (!response.ok) return [];
+      const parsed = parseVitrina(await response.json());
+      return parsed ? parsed.pieces.map((piece) => piece.title) : [];
+    } catch {
+      return [];
+    }
+  }, []);
+
+  const postSold = useCallback(async (generation: number, nombre: string) => {
+    try {
+      await fetch("/api/voz", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "marcar_vendido", arguments: JSON.stringify({ nombre }) }),
+      });
+    } catch {
+      return;
+    }
+    if (rigRef.current.generation !== generation) return;
+    notifyVitrina();
+  }, []);
+
   const flushFollowUp = useCallback((generation: number) => {
     const session = sessionRef.current;
     if (rigRef.current.generation !== generation) return;
@@ -408,7 +437,23 @@ export function useSobrinoCall(): SobrinoCall {
         if (rigRef.current.handledCalls.has(toolCall.callId)) return;
         rigRef.current.handledCalls.add(toolCall.callId);
         const { callId, name } = toolCall;
-        const argumentsJson = toolCall.argumentsJson;
+        const argumentsJson =
+          name === "marcar_vendido"
+            ? nombreForSoldTool(toolCall.argumentsJson, rigRef.current.titles, rigRef.current.memory.lastTitle)
+            : toolCall.argumentsJson;
+        if (name === "marcar_vendido") {
+          try {
+            const parsed: unknown = JSON.parse(argumentsJson);
+            if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+              const nombre = (parsed as { nombre?: unknown }).nombre;
+              if (typeof nombre === "string" && rigRef.current.titles.includes(nombre)) {
+                rigRef.current.memory = { ...rigRef.current.memory, lastTitle: nombre };
+              }
+            }
+          } catch {
+            // The call still goes out with the arguments already chosen.
+          }
+        }
         if (name === HANGUP_TOOL) {
           const spoke = session.heardVoice || nephewIsSpeaking();
           session.machine = {
@@ -518,18 +563,46 @@ export function useSobrinoCall(): SobrinoCall {
         return;
       }
       if (type === "audio-transcript-done") {
-        appendSobrino(typeof record.transcript === "string" ? record.transcript : "", true);
+        const transcript = typeof record.transcript === "string" ? record.transcript : "";
+        const spoken =
+          transcript.trim() ||
+          session.captions.find((caption) => caption.id === session.sobrinoId)?.text ||
+          "";
+        appendSobrino(spoken, true);
+        if (spoken.trim()) {
+          const titles = await listedTitles();
+          if (rigRef.current.generation === generation) {
+            rigRef.current.titles = titles;
+            rigRef.current.memory = rememberSpeech("sobrino", spoken, titles, rigRef.current.memory);
+          }
+        }
         commit();
         return;
       }
       if (type === "text-done" && typeof record.text === "string" && !session.heardVoice) {
         appendSobrino(record.text, true);
+        if (record.text.trim()) {
+          const titles = await listedTitles();
+          if (rigRef.current.generation === generation) {
+            rigRef.current.titles = titles;
+            rigRef.current.memory = rememberSpeech("sobrino", record.text, titles, rigRef.current.memory);
+          }
+        }
         commit();
         return;
       }
       if (type === "input-transcription-completed") {
-        appendNorma(typeof record.transcript === "string" ? record.transcript : "");
+        const transcript = typeof record.transcript === "string" ? record.transcript : "";
+        appendNorma(transcript);
         commit();
+        if (transcript.trim()) {
+          const titles = await listedTitles();
+          if (rigRef.current.generation !== generation || sessionRef.current.machine.type !== "live") return;
+          const nombre = soldName(transcript, titles, rigRef.current.memory);
+          rigRef.current.titles = titles;
+          rigRef.current.memory = rememberSpeech("norma", transcript, titles, rigRef.current.memory);
+          if (nombre) await postSold(generation, nombre);
+        }
         return;
       }
       if (type === "speech-started") {
@@ -542,7 +615,7 @@ export function useSobrinoCall(): SobrinoCall {
         commit();
       }
     },
-    [appendNorma, appendSobrino, commit, finish, flushFollowUp, nephewIsSpeaking],
+    [appendNorma, appendSobrino, commit, finish, flushFollowUp, listedTitles, nephewIsSpeaking, postSold],
   );
 
   const enqueueControl = useCallback(
@@ -766,6 +839,8 @@ export function useSobrinoCall(): SobrinoCall {
     rigRef.current.speakingUntil = 0;
     rigRef.current.greeting = null;
     rigRef.current.handledCalls = new Set<string>();
+    rigRef.current.titles = [];
+    rigRef.current.memory = { lastTitle: null, awaitingChoice: false };
     commit();
     void connect(generation);
   }, [commit, connect]);

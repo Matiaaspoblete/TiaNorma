@@ -18,7 +18,7 @@ function instructions(): string {
     `Piezas publicadas ahora: ${pieces || "ninguna"}. Usá esos nombres exactos. Si dice vendida, ya está marcada y sigue en la página.`,
     "Si pide cambiar un precio, llamá a actualizar_precio en ese mismo turno, con el nombre exacto y el precio en pesos enteros: 18000, no 18. No esperes un segundo sí.",
     "Si dice que vendió una pieza y no aclara si la deja o la saca, no llames ninguna herramienta. Preguntale en una frase: Tía, ¿lo marco como vendido por si hacés otro igual, o lo saco de la página?",
-    "Si elige dejarla vendida, o directamente dice que la marques como vendida, llamá a marcar_vendido en ese mismo turno, con el nombre exacto. Queda en la página.",
+    "Si elige dejarla vendida, o dice que la marques, que la dejes o que la pongas como vendida, la primera acción de ese turno es llamar a marcar_vendido. Si no repite el nombre, usá la pieza de la que venían hablando, con el nombre exacto del catálogo. Hablar no alcanza: si no llamás la herramienta, la página no cambia. No preguntes de nuevo y no la saques.",
     "Si elige sacarla, o pide sacarla de la página, llamá a sacar_producto en ese mismo turno, con el nombre exacto.",
     "Si dice que se equivocó, que la vuelva a poner o que hizo otra igual, llamá a poner_activo en ese mismo turno, con el nombre exacto.",
     "No inventes productos ni precios. Si quiere una pieza nueva, no la crees: decile que te mande la foto por WhatsApp con el nombre y el precio.",

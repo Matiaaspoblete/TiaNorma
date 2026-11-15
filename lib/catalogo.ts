@@ -796,7 +796,7 @@ export function voiceToolDefinitions(): readonly RealtimeModelV4ToolDefinition[]
         );
       case "marcar_vendido":
         return described(
-          "Marca la pieza como vendida y la deja en la página, por si hace otra igual. Usá el nombre tal cual. No la saques.",
+          "Marca la pieza como vendida y la deja en la página, por si hace otra igual. Llamala en el mismo turno en que ella pide marcarla, dejarla o ponerla vendida. Si no repite el nombre, usá la pieza de la que venían hablando. Usá el nombre tal cual. No la saques.",
         );
       case "poner_activo":
         return described(
