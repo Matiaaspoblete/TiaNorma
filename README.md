@@ -80,9 +80,12 @@ Si Norma carga una pieza nueva, aparece sola (la grilla se actualiza sola):
 | Vitrina (comprador) | http://localhost:8787/ |
 | Celular de Norma (simulador) | http://localhost:8787/telefono |
 | Clave para la llamada | `AI_GATEWAY_API_KEY` o `VERCEL_AI_GATEWAY` en `.env.local` (Vercel AI Gateway → ElevenLabs realtime) |
+| Persistencia (opcional) | `NORMA_DATABASE_URL` en `.env.local` — connection string de Postgres (Supabase → Project Settings → Database) |
 | Credenciales de prueba | no hay login |
 
 Sin la clave de Gateway, la vitrina y el alta por WhatsApp andan igual. La llamada a Goncy no: te va a decir que falta la env.
+
+Sin `NORMA_DATABASE_URL`, el catálogo se guarda en `data/catalogo.json` (y las fotos en `data/piezas/`). Con la variable, va a Supabase (`norma.pieza`).
 
 ---
 
@@ -100,7 +103,7 @@ Ideal: Norma agrega una pieza por WhatsApp y después llama para cambiar un prec
 ## Stack
 
 - Next.js (App Router) + React
-- Catálogo en archivo local (`data/catalogo.json`) + fotos en `data/piezas/`
+- Catálogo: Supabase Postgres si hay `NORMA_DATABASE_URL`; si no, archivo local (`data/catalogo.json`) + fotos en `data/piezas/`
 - Alta por `POST /api/piezas` (multipart)
 - Voz: Vercel AI Gateway + ElevenLabs realtime (`/api/call`, `/api/voz`)
 - Semillas en `contenido/semillas/`
@@ -111,9 +114,10 @@ Ideal: Norma agrega una pieza por WhatsApp y después llama para cambiar un prec
 
 ```bash
 npm install
-# opcional, solo para la llamada:
-# echo 'AI_GATEWAY_API_KEY=...' > .env.local
+# opcional — copiá .env.example a .env.local y completá lo que necesites:
+# AI_GATEWAY_API_KEY=...          # solo para la llamada
+# NORMA_DATABASE_URL=...          # Supabase (si no, usa data/ local)
 npm run dev
 ```
 
-Abre http://localhost:8787/ y http://localhost:8787/telefono.
+Abre http://localhost:8787/ y http://localhost:8787/telefono. No hay migración en el repo: la tabla `norma.pieza` tiene que existir ya en el proyecto de Supabase.
