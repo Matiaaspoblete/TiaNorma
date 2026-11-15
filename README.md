@@ -88,9 +88,10 @@ Sin la clave de Gateway, la vitrina y el alta por WhatsApp andan igual. La llama
 
 ## Demo
 
-<!-- Matías: pegá acá el video o GIF que grabes del celu -->
 
-**[VIDEO / GIF — acá va la demo que graba Matías del teléfono]**
+https://github.com/user-attachments/assets/d6aa3c50-dd87-4692-b7b6-2ceb9702b52a
+
+
 
 Ideal: Norma agrega una pieza por WhatsApp y después llama para cambiar un precio. Dos minutos, sin edición de código.
 
