@@ -75,6 +75,17 @@ export function rememberSpeech(
   return { lastTitle, awaitingChoice: false };
 }
 
+export function priceOrder(spoken: string, titles: readonly string[]): { title: string; price: number } | null {
+  const hit = titlesInSpeech(spoken, titles);
+  if (hit.type !== "one") return null;
+  const match = spoken.match(/(\d{1,3}(?:\.\d{3})+|\d{4,7})/);
+  const raw = match?.[1];
+  if (!raw) return null;
+  const price = Number(raw.includes(".") ? raw.replace(/\./g, "") : raw);
+  if (!Number.isInteger(price) || price < 1000 || price > 9_999_999) return null;
+  return { title: hit.title, price };
+}
+
 export function soldName(spoken: string, titles: readonly string[], state: PieceMemory): string | null {
   const text = normalize(spoken);
   if (!wantsSold(text, state.awaitingChoice)) return null;

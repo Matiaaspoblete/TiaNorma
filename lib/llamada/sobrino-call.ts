@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { nombreForSoldTool, rememberSpeech, soldName, type PieceMemory } from "./pedido";
+import { nombreForSoldTool, priceOrder, rememberSpeech, soldName, type PieceMemory } from "./pedido";
 import { notifyVitrina } from "../vitrina-aviso";
 import { parseVitrina } from "../vitrina";
 
@@ -387,6 +387,23 @@ export function useSobrinoCall(): SobrinoCall {
     notifyVitrina();
   }, []);
 
+  const postPrice = useCallback(async (generation: number, nombre: string, precio: number) => {
+    try {
+      await fetch("/api/voz", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "actualizar_precio",
+          arguments: JSON.stringify({ nombre, precio }),
+        }),
+      });
+    } catch {
+      return;
+    }
+    if (rigRef.current.generation !== generation) return;
+    notifyVitrina();
+  }, []);
+
   const flushFollowUp = useCallback((generation: number) => {
     const session = sessionRef.current;
     if (rigRef.current.generation !== generation) return;
@@ -602,6 +619,8 @@ export function useSobrinoCall(): SobrinoCall {
           rigRef.current.titles = titles;
           rigRef.current.memory = rememberSpeech("norma", transcript, titles, rigRef.current.memory);
           if (nombre) await postSold(generation, nombre);
+          const order = priceOrder(transcript, titles);
+          if (order) await postPrice(generation, order.title, order.price);
         }
         return;
       }
@@ -615,7 +634,7 @@ export function useSobrinoCall(): SobrinoCall {
         commit();
       }
     },
-    [appendNorma, appendSobrino, commit, finish, flushFollowUp, listedTitles, nephewIsSpeaking, postSold],
+    [appendNorma, appendSobrino, commit, finish, flushFollowUp, listedTitles, nephewIsSpeaking, postPrice, postSold],
   );
 
   const enqueueControl = useCallback(

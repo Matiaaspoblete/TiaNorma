@@ -7,8 +7,8 @@ const MODEL = "elevenlabs/eleven-realtime-v1-mini";
 // Agustín. Voz argentina.
 const VOICE = "ByVRQtaK1WDOvTmP1PKO";
 
-function instructions(): string {
-  const pieces = readSnapshot()
+async function instructions(): Promise<string> {
+  const pieces = (await readSnapshot())
     .pieces.map((piece) => `${piece.title} a ${piece.priceLabel}${piece.sold ? ", vendida" : ""}`)
     .join("; ");
   return [
@@ -60,9 +60,9 @@ function gatewayKey(): string {
   throw new Error("Falta VERCEL_AI_GATEWAY en .env.local");
 }
 
-function sessionConfig() {
+async function sessionConfig() {
   return {
-    instructions: instructions(),
+    instructions: await instructions(),
     voice: VOICE,
     outputModalities: ["audio"],
     inputAudioFormat: { type: "audio/pcm", rate: 24000 },
@@ -70,7 +70,7 @@ function sessionConfig() {
     turnDetection: { type: "semantic-vad" },
     inputAudioTranscription: { language: "es" },
     outputAudioTranscription: { language: "es" },
-    tools: [...voiceToolDefinitions(), colgar],
+    tools: [...(await voiceToolDefinitions()), colgar],
   };
 }
 
@@ -85,7 +85,7 @@ export async function mintTicket(): Promise<CallTicket> {
   return {
     url: config.url,
     protocols: [...(config.protocols ?? [])],
-    session: sessionConfig(),
+    session: await sessionConfig(),
     greeting: GREETING,
   };
 }

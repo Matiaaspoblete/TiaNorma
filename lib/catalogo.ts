@@ -3,6 +3,14 @@ import "server-only";
 import fs from "node:fs";
 import path from "node:path";
 import type { Experimental_RealtimeModelV4ToolDefinition as RealtimeModelV4ToolDefinition } from "@ai-sdk/provider";
+import {
+  normaDatabaseEnabled,
+  readNormaPieces,
+  readNormaUpload,
+  writeNormaPieces,
+  type NormaPieceRow,
+  type NormaUpload,
+} from "./norma-db";
 import type { PhotoReceipt, Vitrina } from "./vitrina";
 
 type Pesos = number & { readonly brand: "Pesos" };
@@ -131,7 +139,8 @@ const VOICE_TOOLS: Record<VoiceToolName, VoiceTool> = {
       if (typeof nombre !== "string" || typeof precio !== "number") {
         return rejected(store, "No entendí la pieza o el precio.");
       }
-      const price = pesos(precio);
+      const amount = precio < 1000 ? precio * 1000 : precio;
+      const price = pesos(amount);
       if (!price) return rejected(store, "No entendí la pieza o el precio.");
       return applyCommand(store, { type: "set-price", spokenName: nombre, price });
     },
@@ -595,23 +604,78 @@ function loadStore(): Store {
   }
 }
 
-function boot(): Owner {
-  const slot = globalThis as typeof globalThis & { __tallerDeNorma?: Owner };
-  if (slot.__tallerDeNorma) return slot.__tallerDeNorma;
-  assertSeedFiles();
-  const owner: Owner = { store: loadStore(), tail: Promise.resolve() };
-  slot.__tallerDeNorma = owner;
-  return owner;
+function rowsFromStore(store: Store): NormaPieceRow[] {
+  return store.pieces.map((piece) => ({
+    id: piece.id,
+    title: piece.title,
+    price: piece.price,
+    listed: piece.listed,
+    sold: piece.sold,
+    clientKey: piece.clientKey,
+    imageKind: piece.image.kind,
+    imageFile: piece.image.file,
+    revision: store.revision,
+  }));
 }
 
-function enqueue<T>(job: () => Promise<T>): Promise<T> {
-  const owner = boot();
-  const run = owner.tail.then(job, job);
-  owner.tail = run.then(
-    () => undefined,
-    () => undefined,
-  );
-  return run;
+function pieceFromRow(row: NormaPieceRow): Piece {
+  const price = pesos(row.price);
+  if (!price || !safeName(row.id) || !safeName(row.imageFile) || !row.title.trim()) failUnreadable();
+  return {
+    id: brandId(row.id),
+    title: row.title,
+    price,
+    listed: row.listed,
+    sold: row.sold,
+    clientKey: row.clientKey,
+    image: row.imageKind === "seed" ? { kind: "seed", file: row.imageFile } : { kind: "upload", file: row.imageFile },
+  };
+}
+
+async function storeFromRows(rows: readonly NormaPieceRow[]): Promise<Store> {
+  if (rows.length === 0) {
+    const store = seedStore();
+    await writeNormaPieces(rowsFromStore(store));
+    return store;
+  }
+  return {
+    revision: rows.reduce((max, row) => Math.max(max, row.revision), 0),
+    pieces: rows.map(pieceFromRow),
+  };
+}
+
+async function refresh(owner: Owner) {
+  if (!normaDatabaseEnabled()) return;
+  owner.store = await storeFromRows(await readNormaPieces());
+}
+
+function boot(): Promise<Owner> {
+  const slot = globalThis as typeof globalThis & { __tallerDeNorma?: Owner; __tallerBoot?: Promise<Owner> };
+  if (slot.__tallerDeNorma) return Promise.resolve(slot.__tallerDeNorma);
+  if (!slot.__tallerBoot) {
+    slot.__tallerBoot = (async () => {
+      assertSeedFiles();
+      const store = normaDatabaseEnabled() ? await storeFromRows(await readNormaPieces()) : loadStore();
+      const owner: Owner = { store, tail: Promise.resolve() };
+      slot.__tallerDeNorma = owner;
+      return owner;
+    })().catch((error: unknown) => {
+      slot.__tallerBoot = undefined;
+      throw error;
+    });
+  }
+  return slot.__tallerBoot;
+}
+
+function enqueue<T>(job: (owner: Owner) => Promise<T>): Promise<T> {
+  return boot().then((owner) => {
+    const run = owner.tail.then(() => job(owner), () => job(owner));
+    owner.tail = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
+  });
 }
 
 function project(store: Store): Vitrina {
@@ -683,35 +747,44 @@ function lookupTool(name: string): VoiceTool | null {
   return VOICE_TOOLS[found];
 }
 
-function persist(owner: Owner, applied: Applied) {
-  if (!applied.changed) return;
-  writeStore(applied.store);
-  owner.store = applied.store;
+async function persist(owner: Owner, applied: Applied, upload?: NormaUpload) {
+  if (!applied.changed && !upload) return;
+  const store = applied.changed ? applied.store : owner.store;
+  if (normaDatabaseEnabled()) await writeNormaPieces(rowsFromStore(store), upload);
+  else if (applied.changed) writeStore(store);
+  if (applied.changed) owner.store = store;
 }
 
-export function readSnapshot(): Vitrina {
-  return project(boot().store);
+export function readSnapshot(): Promise<Vitrina> {
+  return enqueue(async (owner) => {
+    await refresh(owner);
+    return project(owner.store);
+  });
 }
 
 export function readPieceImage(
   id: string,
-): { bytes: Uint8Array; mediaType: "image/jpeg" | "image/png" | "image/webp" } | null {
-  if (!safeName(id)) return null;
-  const piece = boot().store.pieces.find((item) => item.id === id && item.listed);
-  if (!piece) return null;
-  const file = safeName(piece.image.file);
-  if (!file) return null;
-  const mediaType = mediaTypeFor(file);
-  if (!mediaType) return null;
-  const full =
-    piece.image.kind === "seed"
-      ? path.join(process.cwd(), "public", "semillas", file)
-      : path.join(process.cwd(), "data", "piezas", file);
-  try {
-    return { bytes: new Uint8Array(fs.readFileSync(full)), mediaType };
-  } catch {
-    return null;
-  }
+): Promise<{ bytes: Uint8Array; mediaType: "image/jpeg" | "image/png" | "image/webp" } | null> {
+  return enqueue(async (owner) => {
+    if (!safeName(id)) return null;
+    await refresh(owner);
+    const piece = owner.store.pieces.find((item) => item.id === id && item.listed);
+    if (!piece) return null;
+    if (piece.image.kind === "upload" && normaDatabaseEnabled()) return readNormaUpload(id);
+    const file = safeName(piece.image.file);
+    if (!file) return null;
+    const mediaType = mediaTypeFor(file);
+    if (!mediaType) return null;
+    const full =
+      piece.image.kind === "seed"
+        ? path.join(process.cwd(), "public", "semillas", file)
+        : path.join(process.cwd(), "data", "piezas", file);
+    try {
+      return { bytes: new Uint8Array(fs.readFileSync(full)), mediaType };
+    } catch {
+      return null;
+    }
+  });
 }
 
 export function publishPiece(input: {
@@ -721,7 +794,7 @@ export function publishPiece(input: {
   bytes: Uint8Array;
   mediaType: string;
 }): Promise<PhotoReceipt> {
-  return enqueue(async () => {
+  return enqueue(async (owner) => {
     if (!UUID_PATTERN.test(input.clientKey)) return { ok: false, reason: "No pude identificar la foto." };
     const title = collapseTitle(input.title);
     if (!title.ok) return { ok: false, reason: title.reason };
@@ -740,9 +813,14 @@ export function publishPiece(input: {
       clientKey: input.clientKey,
       image: { kind: "upload", file: `${input.clientKey}.${extension}` },
     };
-    const owner = boot();
+    await refresh(owner);
     const known = owner.store.pieces.some((item) => item.clientKey === piece.clientKey);
-    if (!known) {
+    const mediaType = input.mediaType === "image/jpg" ? "image/jpeg" : input.mediaType;
+    const upload: NormaUpload | undefined =
+      !known && normaDatabaseEnabled() && (mediaType === "image/jpeg" || mediaType === "image/png" || mediaType === "image/webp")
+        ? { id: piece.id, mediaType, bytes: input.bytes }
+        : undefined;
+    if (!known && !upload) {
       try {
         writeImage(piece.image.file, input.bytes);
       } catch {
@@ -751,9 +829,9 @@ export function publishPiece(input: {
     }
     const applied = applyCommand(owner.store, { type: "publish", piece });
     if (applied.outcome === "rejected") return { ok: false, reason: applied.speech };
-    if (applied.changed) {
+    if (applied.changed || upload) {
       try {
-        persist(owner, applied);
+        await persist(owner, applied, upload);
       } catch {
         return { ok: false, reason: "No pude guardar la pieza." };
       }
@@ -773,12 +851,12 @@ export function runVoiceTool(name: string, argumentsJson: string): Promise<{ out
   } catch {
     return Promise.resolve({ output: "No pude leer el pedido." });
   }
-  return enqueue(async () => {
-    const owner = boot();
+  return enqueue(async (owner) => {
+    await refresh(owner);
     const applied = tool.run(owner.store, args);
     if (applied.changed) {
       try {
-        persist(owner, applied);
+        await persist(owner, applied);
       } catch {
         return { output: "No pude anotar el cambio. Probá de nuevo." };
       }
@@ -787,9 +865,9 @@ export function runVoiceTool(name: string, argumentsJson: string): Promise<{ out
   });
 }
 
-export function voiceToolDefinitions(): readonly RealtimeModelV4ToolDefinition[] {
+export async function voiceToolDefinitions(): Promise<readonly RealtimeModelV4ToolDefinition[]> {
   const names =
-    readSnapshot()
+    (await readSnapshot())
       .pieces.map((piece) => (piece.sold ? `${piece.title} (vendida)` : piece.title))
       .join(", ") || "ninguna";
   return TOOL_NAMES.map((name) => {
