@@ -297,19 +297,45 @@ function manySpeech(titles: readonly string[]): string {
   return `Hay más de una pieza: ${titles.join(", ")}.`;
 }
 
+type PriceChange = { from: Pesos; to: Pesos; at: number };
+
+function priceChanges(): Map<string, PriceChange> {
+  const slot = globalThis as typeof globalThis & { __tallerPriceChange?: Map<string, PriceChange> };
+  if (!slot.__tallerPriceChange) slot.__tallerPriceChange = new Map();
+  return slot.__tallerPriceChange;
+}
+
+function priceMove(title: string, from: Pesos, to: Pesos): string {
+  return `Pasé ${title} de ${priceWords(from)} a ${priceWords(to)}.`;
+}
+
+function rememberPrice(id: string, from: Pesos, to: Pesos) {
+  priceChanges().set(id, { from, to, at: Date.now() });
+}
+
+function recentPriceFrom(id: string, to: Pesos): Pesos | null {
+  const change = priceChanges().get(id);
+  if (!change || change.to !== to || change.from === to) return null;
+  if (Date.now() - change.at > 20_000) return null;
+  return change.from;
+}
+
 function applyPrice(store: Store, spokenName: string, price: Pesos): Applied {
   const match = matchTitle(store.pieces, spokenName, "listed");
   if (match.type === "none") return rejected(store, "No tengo ninguna pieza con ese nombre.");
   if (match.type === "many") return rejected(store, manySpeech(match.titles));
   if (match.piece.price === price) {
+    const from = recentPriceFrom(match.piece.id, price);
+    if (from) return same(store, priceMove(match.piece.title, from, price));
     return same(store, `El precio de ${match.piece.title} ya es ${priceWords(match.piece.price)}.`);
   }
+  rememberPrice(match.piece.id, match.piece.price, price);
   return {
     store: {
       revision: store.revision + 1,
       pieces: store.pieces.map((piece) => (piece.id === match.piece.id ? { ...piece, price } : piece)),
     },
-    speech: `Dejé ${match.piece.title} a ${priceWords(price)}.`,
+    speech: priceMove(match.piece.title, match.piece.price, price),
     changed: true,
     outcome: "done",
   };
