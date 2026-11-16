@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Literata } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 
 const literata = Literata({
@@ -23,7 +24,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es">
-      <body className={literata.className}>{children}</body>
+      <body className={literata.className}>
+        {children}
+        <Analytics />
+      </body>
     </html>
   );
 }
