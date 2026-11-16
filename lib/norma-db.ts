@@ -37,13 +37,12 @@ type PhotoQuery = {
   image_bytes: Buffer | null;
 };
 
-let client: ReturnType<typeof postgres> | undefined;
-
 function db() {
   const url = process.env.NORMA_DATABASE_URL;
   if (!url) throw new Error("Falta NORMA_DATABASE_URL.");
-  if (!client) client = postgres(url, { prepare: false, ssl: "require", max: 1, idle_timeout: 20 });
-  return client;
+  const slot = globalThis as typeof globalThis & { __normaSql?: ReturnType<typeof postgres> };
+  if (!slot.__normaSql) slot.__normaSql = postgres(url, { prepare: false, ssl: "require", max: 3, idle_timeout: 20 });
+  return slot.__normaSql;
 }
 
 export function normaDatabaseEnabled(): boolean {
@@ -125,6 +124,24 @@ export async function writeNormaPieces(rows: readonly NormaPieceRow[], upload?: 
       `;
     }
   });
+}
+
+const GALLERY_ID = /^[a-z0-9-]{1,40}$/;
+
+export async function readGaleria(
+  id: string,
+): Promise<{ bytes: Uint8Array; mediaType: "image/jpeg" | "image/png" | "image/webp" } | null> {
+  if (!GALLERY_ID.test(id)) return null;
+  const rows = await db()<PhotoQuery[]>`
+    select media_type, image_bytes
+    from norma.galeria
+    where id = ${id}
+  `;
+  const row = rows[0];
+  if (!row?.image_bytes || (row.media_type !== "image/jpeg" && row.media_type !== "image/png" && row.media_type !== "image/webp")) {
+    return null;
+  }
+  return { bytes: new Uint8Array(row.image_bytes), mediaType: row.media_type };
 }
 
 export async function readNormaUpload(

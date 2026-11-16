@@ -10,7 +10,7 @@
       "clientKey": null,
       "image": {
         "kind": "seed",
-        "file": "plato-azul.jpg"
+        "file": "plato-azul.webp"
       }
     },
     {
@@ -22,7 +22,7 @@
       "clientKey": null,
       "image": {
         "kind": "seed",
-        "file": "taza-y-plato.jpg"
+        "file": "taza-y-plato.webp"
       }
     },
     {
@@ -34,7 +34,7 @@
       "clientKey": null,
       "image": {
         "kind": "seed",
-        "file": "caramelera.png"
+        "file": "caramelera.webp"
       }
     },
     {
@@ -46,7 +46,7 @@
       "clientKey": null,
       "image": {
         "kind": "seed",
-        "file": "jarrones.jpg"
+        "file": "jarrones.webp"
       }
     },
     {
@@ -58,7 +58,7 @@
       "clientKey": null,
       "image": {
         "kind": "seed",
-        "file": "mate-y-cuenco.jpg"
+        "file": "mate-y-cuenco.webp"
       }
     },
     {
@@ -70,7 +70,7 @@
       "clientKey": "ae0c4e75-734b-48fb-bd48-642c885f2698",
       "image": {
         "kind": "upload",
-        "file": "ae0c4e75-734b-48fb-bd48-642c885f2698.jpg"
+        "file": "ae0c4e75-734b-48fb-bd48-642c885f2698.webp"
       }
     }
   ]

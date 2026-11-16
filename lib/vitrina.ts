@@ -25,6 +25,7 @@ export type PhotoReceipt =
 function pieceImageUrl(url: string): boolean {
   if (url.includes("..") || url.includes("\\") || url.includes("//")) return false;
   if (url.startsWith("/api/piezas/")) return url.length > "/api/piezas/".length && !url.slice("/api/piezas/".length).includes("/");
+  if (url.startsWith("/api/galeria/")) return /^[a-z0-9-]{1,40}$/.test(url.slice("/api/galeria/".length));
   if (url.startsWith("/semillas/")) return /^[a-z0-9-]+\.(?:jpg|jpeg|png|webp)$/.test(url.slice("/semillas/".length));
   return false;
 }

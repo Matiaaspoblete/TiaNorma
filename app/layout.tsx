@@ -4,7 +4,10 @@ import "./globals.css";
 
 const literata = Literata({
   subsets: ["latin"],
+  weight: ["400", "600"],
   display: "swap",
+  adjustFontFallback: true,
+  preload: true,
 });
 
 export const metadata: Metadata = {

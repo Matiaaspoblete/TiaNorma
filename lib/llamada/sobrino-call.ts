@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { nombreForSoldTool, priceOrder, rememberSpeech, soldName, type PieceMemory } from "./pedido";
+import { nombreForSoldTool, priceOrders, rememberSpeech, soldName, type PieceMemory } from "./pedido";
 import { notifyVitrina } from "../vitrina-aviso";
 import { parseVitrina } from "../vitrina";
 
@@ -616,11 +616,13 @@ export function useSobrinoCall(): SobrinoCall {
           const titles = await listedTitles();
           if (rigRef.current.generation !== generation || sessionRef.current.machine.type !== "live") return;
           const nombre = soldName(transcript, titles, rigRef.current.memory);
+          const previous = rigRef.current.memory.lastTitle;
           rigRef.current.titles = titles;
           rigRef.current.memory = rememberSpeech("norma", transcript, titles, rigRef.current.memory);
           if (nombre) await postSold(generation, nombre);
-          const order = priceOrder(transcript, titles);
-          if (order) await postPrice(generation, order.title, order.price);
+          for (const order of priceOrders(transcript, titles, previous)) {
+            await postPrice(generation, order.title, order.price);
+          }
         }
         return;
       }

@@ -2,16 +2,16 @@
 
 import { useEffect, useRef, useState } from "react";
 import { listenVitrina } from "./vitrina-aviso";
-import { parseVitrina, type VisiblePiece } from "./vitrina";
+import { parseVitrina, type VisiblePiece, type Vitrina } from "./vitrina";
 
 function stamp(pieces: readonly VisiblePiece[]): string {
   return pieces.map((piece) => `${piece.id}\n${piece.sold ? "1" : "0"}\n${piece.priceLabel}`).join("\n");
 }
 
-export function useVitrina(): { pieces: readonly VisiblePiece[]; ready: boolean } {
-  const [pieces, setPieces] = useState<readonly VisiblePiece[]>([]);
-  const [ready, setReady] = useState(false);
-  const seen = useRef<string | null>(null);
+export function useVitrina(initial: Vitrina): { pieces: readonly VisiblePiece[]; ready: boolean } {
+  const [pieces, setPieces] = useState<readonly VisiblePiece[]>(initial.pieces);
+  const [ready, setReady] = useState(true);
+  const seen = useRef<string | null>(stamp(initial.pieces));
 
   useEffect(() => {
     let cancelled = false;
@@ -37,7 +37,6 @@ export function useVitrina(): { pieces: readonly VisiblePiece[]; ready: boolean 
       void pull();
     }
 
-    void pull();
     const id = window.setInterval(() => void pull(), 1000);
     const stopListen = listenVitrina(() => void pull());
     document.addEventListener("visibilitychange", onWake);

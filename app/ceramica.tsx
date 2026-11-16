@@ -1,32 +1,5 @@
-"use client";
-
 import { useId } from "react";
-
-const COBALT = "#1f4f8f";
-const DEEP = "#163a6c";
-const GLAZE = "#f7f1e6";
-const CLAY = "#e7d3b8";
-
-function Petalos() {
-  return (
-    <g>
-      {[0, 72, 144, 216, 288].map((deg) => (
-        <ellipse
-          key={deg}
-          cx="32"
-          cy="14"
-          rx="8.2"
-          ry="13"
-          fill={COBALT}
-          transform={`rotate(${deg} 32 32)`}
-        />
-      ))}
-      <circle cx="32" cy="32" r="7" fill={DEEP} />
-      <circle cx="32" cy="32" r="3.1" fill="#2f6cb5" />
-      <circle cx="30.4" cy="30.4" r="1.5" fill={GLAZE} />
-    </g>
-  );
-}
+import { CLAY, COBALT, GLAZE, Petalos } from "./flor";
 
 function Hoja() {
   return (
@@ -34,14 +7,6 @@ function Hoja() {
       <path d="M2 18C16 2 44 1 58 14C46 28 18 32 2 18Z" fill={COBALT} />
       <path d="M8 18C22 14 40 12 52 14" fill="none" stroke={GLAZE} strokeWidth="1.3" strokeLinecap="round" opacity="0.8" />
     </g>
-  );
-}
-
-export function Flor({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 64 64" aria-hidden="true">
-      <Petalos />
-    </svg>
   );
 }
 

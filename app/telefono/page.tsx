@@ -151,9 +151,9 @@ const PASTILLAS = [
 const KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "*", "0", "#"] as const;
 
 const FOTOS = [
-  { id: "taza-verde", title: "Taza verde", src: "/telefono/galeria/taza-verde.jpg" },
-  { id: "tazones", title: "Tazones", src: "/telefono/galeria/tazones.jpg" },
-  { id: "mate-negro", title: "Mate negro", src: "/telefono/galeria/mate-negro.jpg" },
+  { id: "taza-verde", title: "Taza verde", src: "/api/galeria/taza-verde" },
+  { id: "tazones", title: "Tazones", src: "/api/galeria/tazones" },
+  { id: "mate-negro", title: "Mate negro", src: "/api/galeria/mate-negro" },
 ] as const;
 
 function usePhoneScale() {
@@ -445,8 +445,9 @@ export default function TelefonoPage() {
       const response = await fetch(photo.src);
       if (!response.ok) return;
       const blob = await response.blob();
-      const type = blob.type.startsWith("image/") ? blob.type : "image/jpeg";
-      chooseFile(new File([blob], `${photo.id}.jpg`, { type }));
+      const type = blob.type === "image/png" || blob.type === "image/jpeg" || blob.type === "image/webp" ? blob.type : "image/webp";
+      const extension = type === "image/png" ? "png" : type === "image/jpeg" ? "jpg" : "webp";
+      chooseFile(new File([blob], `${photo.id}.${extension}`, { type }));
       setPickerOpen(false);
     } finally {
       setPickingId(null);
@@ -610,7 +611,7 @@ export default function TelefonoPage() {
                     </button>
                   </div>
                   <div className={styles.inCallMain}>
-                    <div className={styles.avatar}><img src="/telefono/goncy.png" alt="" /></div>
+                    <div className={styles.avatar}><img src="/telefono/goncy.webp" alt="" width={96} height={96} decoding="async" /></div>
                     <h2>Goncy</h2>
                     <p className={styles.timer}>{call.phase === "live" && callStarted ? elapsedText(seconds) : "Llamando…"}</p>
                     <p className={styles.callStatus} aria-live="polite">
@@ -656,7 +657,7 @@ export default function TelefonoPage() {
                     {tab === "contacts" ? (
                       <>
                         <button type="button" className={styles.favorite} onClick={dialGoncy}>
-                          <span className={styles.avatar}><img src="/telefono/goncy.png" alt="" /></span>
+                          <span className={styles.avatar}><img src="/telefono/goncy.webp" alt="" width={96} height={96} decoding="async" /></span>
                           <span className={styles.who}>
                             <strong>Goncy</strong>
                             <span>Móvil</span>
@@ -669,7 +670,7 @@ export default function TelefonoPage() {
                     ) : null}
                     {tab === "recents" ? (
                       <button type="button" className={styles.row} onClick={dialGoncy}>
-                        <span className={styles.avatar}><img src="/telefono/goncy.png" alt="" /></span>
+                        <span className={styles.avatar}><img src="/telefono/goncy.webp" alt="" width={96} height={96} decoding="async" /></span>
                         <span className={styles.who}>
                           <strong>Goncy</strong>
                           <span>{call.phase === "ended" ? call.status : "Móvil"}</span>
@@ -718,7 +719,7 @@ export default function TelefonoPage() {
                       <BackIcon />
                     </button>
                     <div className={styles.waWho}>
-                      <span className={styles.waAvatar}><img src="/telefono/goncy.png" alt="" /></span>
+                      <span className={styles.waAvatar}><img src="/telefono/goncy.webp" alt="" width={96} height={96} decoding="async" /></span>
                       <span>
                         <strong>Goncy</strong>
                         <span>en línea</span>

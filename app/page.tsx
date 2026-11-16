@@ -1,8 +1,10 @@
-"use client";
-
-import { useVitrina } from "../lib/use-vitrina";
+import { Suspense } from "react";
+import { preload } from "react-dom";
+import { readSnapshot } from "../lib/catalogo";
 import { phoneHref, phoneLabel } from "../lib/phone";
-import { Cuenco, Flor, Florero, Plato, Ramo } from "./ceramica";
+import { Cuenco, Florero, Plato, Ramo } from "./ceramica";
+import { Flor } from "./flor";
+import { VitrinaGrid } from "./vitrina-grid";
 import styles from "./page.module.css";
 
 function prettyPhone(value: string) {
@@ -11,8 +13,29 @@ function prettyPhone(value: string) {
   return `+54 ${match[1]} ${match[2]} ${match[3]}-${match[4]}`;
 }
 
+export const dynamic = "force-dynamic";
+
+function VitrinaFallback() {
+  return (
+    <ul className={styles.grid} aria-hidden="true">
+      {[0, 1].map((item) => (
+        <li key={item} className={styles.plate}>
+          <div className={styles.frame} />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+async function Catalogo() {
+  const vitrina = await readSnapshot();
+  for (const piece of vitrina.pieces.slice(0, 2)) {
+    preload(piece.imageUrl, { as: "image", fetchPriority: "high" });
+  }
+  return <VitrinaGrid initial={vitrina} />;
+}
+
 export default function Page() {
-  const vitrina = useVitrina();
   return (
     <main className={styles.page}>
       <div className={styles.ground} aria-hidden="true">
@@ -41,30 +64,9 @@ export default function Page() {
             <p className={styles.lead}>Piezas de cerámica. Para encargar, llamala o mandale un mensaje.</p>
           </div>
         </header>
-        {vitrina.pieces.length === 0 && vitrina.ready ? (
-          <p className={styles.empty}>Ahora no hay piezas en el taller.</p>
-        ) : (
-          <ul className={styles.grid}>
-            {vitrina.pieces.map((piece) => (
-              <li key={piece.id} className={styles.plate}>
-                <div className={piece.sold ? `${styles.frame} ${styles.frameSold}` : styles.frame}>
-                  <img src={piece.imageUrl} alt={piece.title} />
-                </div>
-                <div className={styles.meta}>
-                  <h2>{piece.title}</h2>
-                  {piece.sold ? (
-                    <p className={styles.sold}>Vendido</p>
-                  ) : (
-                    <p className={styles.price}>
-                      <Flor className={styles.seal} />
-                      {piece.priceLabel}
-                    </p>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
+        <Suspense fallback={<VitrinaFallback />}>
+          <Catalogo />
+        </Suspense>
       </div>
     </main>
   );

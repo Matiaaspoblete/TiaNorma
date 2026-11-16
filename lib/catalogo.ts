@@ -11,6 +11,7 @@ import {
   type NormaPieceRow,
   type NormaUpload,
 } from "./norma-db";
+import { toDisplayWebp } from "./imagen";
 import type { PhotoReceipt, Vitrina } from "./vitrina";
 
 type Pesos = number & { readonly brand: "Pesos" };
@@ -63,11 +64,11 @@ type VoiceTool = {
 };
 
 const SEEDS = [
-  { id: "plato-azul", title: "Plato azul", price: 25000, file: "plato-azul.jpg" },
-  { id: "taza-y-plato", title: "Taza y plato", price: 12000, file: "taza-y-plato.jpg" },
-  { id: "caramelera", title: "Caramelera", price: 30000, file: "caramelera.png" },
-  { id: "jarrones", title: "Jarrones", price: 25000, file: "jarrones.jpg" },
-  { id: "mate-y-cuenco", title: "Mate y cuenco", price: 25000, file: "mate-y-cuenco.jpg" },
+  { id: "plato-azul", title: "Plato azul", price: 25000, file: "plato-azul.webp" },
+  { id: "taza-y-plato", title: "Taza y plato", price: 12000, file: "taza-y-plato.webp" },
+  { id: "caramelera", title: "Caramelera", price: 30000, file: "caramelera.webp" },
+  { id: "jarrones", title: "Jarrones", price: 25000, file: "jarrones.webp" },
+  { id: "mate-y-cuenco", title: "Mate y cuenco", price: 25000, file: "mate-y-cuenco.webp" },
 ] as const;
 
 const MAX_PHOTO_BYTES = 8 * 1024 * 1024;
@@ -687,10 +688,46 @@ function project(store: Store): Vitrina {
         id: piece.id,
         title: piece.title,
         priceLabel: formatPrice(piece.price),
-        imageUrl: piece.image.kind === "seed" ? `/semillas/${piece.image.file}` : `/api/piezas/${piece.id}`,
+        imageUrl: imageUrlFor(piece),
         sold: piece.sold === true,
       })),
   };
+}
+
+function seedAsset(file: string): string {
+  return file.replace(/\.(?:jpe?g|png)$/i, ".webp");
+}
+
+function imageUrlFor(piece: Piece): string {
+  if (piece.image.kind === "seed") return `/semillas/${seedAsset(piece.image.file)}`;
+  const base = piece.image.file.replace(/\.(?:jpe?g|png|webp)$/i, "");
+  if (/^[a-z0-9-]+$/.test(base) && !/^[0-9a-f]{8}-/.test(base)) return `/api/galeria/${base}`;
+  return `/api/piezas/${piece.id}`;
+}
+
+const displayedWebp = new Map<string, Uint8Array>();
+
+async function displayBytes(
+  id: string,
+  bytes: Uint8Array,
+  mediaType: "image/jpeg" | "image/png" | "image/webp",
+): Promise<{ bytes: Uint8Array; mediaType: "image/jpeg" | "image/png" | "image/webp" }> {
+  if (mediaType === "image/webp") return { bytes, mediaType };
+  const cached = displayedWebp.get(id);
+  if (cached) return { bytes: cached, mediaType: "image/webp" };
+  try {
+    const webp = await toDisplayWebp(bytes);
+    if (displayedWebp.has(id)) displayedWebp.delete(id);
+    displayedWebp.set(id, webp);
+    while (displayedWebp.size > 32) {
+      const oldest = displayedWebp.keys().next().value;
+      if (oldest === undefined) break;
+      displayedWebp.delete(oldest);
+    }
+    return { bytes: webp, mediaType: "image/webp" };
+  } catch {
+    return { bytes, mediaType };
+  }
 }
 
 function mediaTypeFor(file: string): "image/jpeg" | "image/png" | "image/webp" | null {
@@ -753,12 +790,43 @@ async function persist(owner: Owner, applied: Applied, upload?: NormaUpload) {
   if (normaDatabaseEnabled()) await writeNormaPieces(rowsFromStore(store), upload);
   else if (applied.changed) writeStore(store);
   if (applied.changed) owner.store = store;
+  invalidateSnapshot();
+}
+
+const SNAPSHOT_TTL_MS = 1000;
+
+type SnapshotSlot = { epoch: number; cached: { at: number; value: Vitrina } | null };
+
+function snapshots(): SnapshotSlot {
+  const slot = globalThis as typeof globalThis & { __tallerSnapshot?: SnapshotSlot };
+  if (!slot.__tallerSnapshot) slot.__tallerSnapshot = { epoch: 0, cached: null };
+  return slot.__tallerSnapshot;
+}
+
+function freshSnapshot(): Vitrina | null {
+  const cached = snapshots().cached;
+  if (!cached) return null;
+  if (Date.now() - cached.at >= SNAPSHOT_TTL_MS) return null;
+  return cached.value;
+}
+
+function invalidateSnapshot() {
+  const slot = snapshots();
+  slot.epoch += 1;
+  slot.cached = null;
 }
 
 export function readSnapshot(): Promise<Vitrina> {
+  const ready = freshSnapshot();
+  if (ready) return Promise.resolve(ready);
   return enqueue(async (owner) => {
+    const again = freshSnapshot();
+    if (again) return again;
+    const epoch = snapshots().epoch;
     await refresh(owner);
-    return project(owner.store);
+    const value = project(owner.store);
+    if (snapshots().epoch === epoch) snapshots().cached = { at: Date.now(), value };
+    return value;
   });
 }
 
@@ -770,9 +838,14 @@ export function readPieceImage(
     await refresh(owner);
     const piece = owner.store.pieces.find((item) => item.id === id && item.listed);
     if (!piece) return null;
-    if (piece.image.kind === "upload" && normaDatabaseEnabled()) return readNormaUpload(id);
-    const file = safeName(piece.image.file);
-    if (!file) return null;
+    if (piece.image.kind === "upload" && normaDatabaseEnabled()) {
+      const stored = await readNormaUpload(id);
+      if (!stored) return null;
+      return displayBytes(id, stored.bytes, stored.mediaType);
+    }
+    const storedName = safeName(piece.image.file);
+    if (!storedName) return null;
+    const file = piece.image.kind === "seed" ? seedAsset(storedName) : storedName;
     const mediaType = mediaTypeFor(file);
     if (!mediaType) return null;
     const full =
@@ -780,7 +853,7 @@ export function readPieceImage(
         ? path.join(process.cwd(), "public", "semillas", file)
         : path.join(process.cwd(), "data", "piezas", file);
     try {
-      return { bytes: new Uint8Array(fs.readFileSync(full)), mediaType };
+      return displayBytes(id, new Uint8Array(fs.readFileSync(full)), mediaType);
     } catch {
       return null;
     }
@@ -804,6 +877,12 @@ export function publishPiece(input: {
     if (!extension) return { ok: false, reason: "La foto tiene que ser jpg, png o webp." };
     if (input.bytes.byteLength < 1) return { ok: false, reason: "La foto está vacía." };
     if (input.bytes.byteLength > MAX_PHOTO_BYTES) return { ok: false, reason: "La foto es demasiado pesada." };
+    let bytes: Uint8Array;
+    try {
+      bytes = await toDisplayWebp(input.bytes);
+    } catch {
+      return { ok: false, reason: "La foto tiene que ser jpg, png o webp." };
+    }
     const piece: Piece = {
       id: brandId(input.clientKey),
       title: title.title,
@@ -811,18 +890,16 @@ export function publishPiece(input: {
       listed: true,
       sold: false,
       clientKey: input.clientKey,
-      image: { kind: "upload", file: `${input.clientKey}.${extension}` },
+      image: { kind: "upload", file: `${input.clientKey}.webp` },
     };
     await refresh(owner);
     const known = owner.store.pieces.some((item) => item.clientKey === piece.clientKey);
-    const mediaType = input.mediaType === "image/jpg" ? "image/jpeg" : input.mediaType;
-    const upload: NormaUpload | undefined =
-      !known && normaDatabaseEnabled() && (mediaType === "image/jpeg" || mediaType === "image/png" || mediaType === "image/webp")
-        ? { id: piece.id, mediaType, bytes: input.bytes }
-        : undefined;
+    const upload: NormaUpload | undefined = !known && normaDatabaseEnabled()
+      ? { id: piece.id, mediaType: "image/webp", bytes }
+      : undefined;
     if (!known && !upload) {
       try {
-        writeImage(piece.image.file, input.bytes);
+        writeImage(piece.image.file, bytes);
       } catch {
         return { ok: false, reason: "No pude guardar la pieza." };
       }
