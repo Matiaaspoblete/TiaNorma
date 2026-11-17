@@ -171,12 +171,23 @@ function usePhoneScale() {
   return scale;
 }
 
+const BUENOS_AIRES = "America/Argentina/Buenos_Aires";
+
 function clockText(date: Date) {
-  return new Intl.DateTimeFormat("es-AR", { hour: "2-digit", minute: "2-digit" }).format(date);
+  return new Intl.DateTimeFormat("es-AR", {
+    timeZone: BUENOS_AIRES,
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
 }
 
 function dateText(date: Date) {
-  const raw = new Intl.DateTimeFormat("es-AR", { weekday: "long", day: "numeric", month: "long" }).format(date);
+  const raw = new Intl.DateTimeFormat("es-AR", {
+    timeZone: BUENOS_AIRES,
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  }).format(date);
   return raw.charAt(0).toUpperCase() + raw.slice(1);
 }
 
