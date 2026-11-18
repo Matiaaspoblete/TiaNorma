@@ -2,6 +2,12 @@
 
 Tía Norma tiene 70, vende cerámica y solo usa WhatsApp. Acá no hay panel de admin: ella **llama a Goncy** para cambiar precios o sacar piezas, y **manda una foto por WhatsApp** cuando hay una nueva. Los compradores ven una sola página, grande y clara.
 
+## 🏆 Top 3 del challenge de la tía Norma
+
+TiaNorma fue uno de los 3 proyectos seleccionados en el challenge de [@goncy](https://x.com/goncy), revisado en vivo en Twitch por la abuela Bety (la tía Norma). Su veredicto: muy simple y fácil de usar, que era justo la idea.
+
+[challenge original](https://x.com/goncy/status/2120275311028011449) · [stream en Twitch](https://twitch.tv/goncypozzo) · [mi hilo](https://x.com/pobletedev/status/2121989495172337958)
+
 ---
 
 ## Cómo lo usa Norma
